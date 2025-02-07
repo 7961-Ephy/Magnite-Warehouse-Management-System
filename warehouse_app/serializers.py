@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import CustomUser, Product, Category
+from .models import CustomUser, Product, Category, Order, OrderItem, Transaction
 
 
 # Serializer for user registration and user details
@@ -62,4 +62,46 @@ class ProductSerializer(serializers.ModelSerializer):
             "reorder_threshold",
             "reorder_quantity",
             "image",
+        ]
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = ["id", "product", "quantity", "price"]
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "order_number",
+            "order_status",
+            "order_date",
+            "total_price",
+            "payment_status",
+            "items",
+        ]
+        read_only_fields = ["order_number", "order_status", "payment_status"]
+
+
+class TransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = [
+            "id",
+            "order",
+            "transaction_date",
+            "amount",
+            "payment_status",
+            "currency",
+            "stripe_payment_intent_id",
+        ]
+        read_only_fields = [
+            "transaction_date",
+            "payment_status",
+            "stripe_payment_intent_id",
         ]

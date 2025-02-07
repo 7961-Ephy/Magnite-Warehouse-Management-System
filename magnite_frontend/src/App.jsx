@@ -16,6 +16,7 @@ import Orders from "./pages/Orders";
 import Cart from "./pages/MyCart";
 import Profile from "./pages/Profile";
 import { CartProvider } from "./context/CartContext";
+import Checkout from "./pages/Checkout";
 
 // Protected Route Component
 const ProtectedRoute = ({ children, adminOnly = false }) => {
@@ -81,12 +82,19 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/checkout"
+              element={
+                <ProtectedRoute adminOnly={false}>
+                  <Checkout />
+                </ProtectedRoute>
+              }
+            />
 
-            {/* Shared Protected Route (accessible by both admin and trader) */}
             <Route
               path="/profile"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute adminOnly={false}>
                   <Profile />
                 </ProtectedRoute>
               }

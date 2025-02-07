@@ -5,6 +5,7 @@ from django.contrib.auth.models import (
 )
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.conf import settings
 import phonenumbers
 
 
@@ -92,3 +93,66 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Order(models.Model):
+    ORDER_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("processing", "Processing"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    order_number = models.CharField(max_length=20, unique=True)
+    order_status = models.CharField(
+        max_length=20, choices=ORDER_STATUS_CHOICES, default="pending"
+    )
+    order_date = models.DateTimeField(auto_now_add=True)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=[("pending", "Pending"), ("paid", "Paid"), ("failed", "Failed")],
+        default="pending",
+    )
+
+    def __str__(self):
+        return f"Order {self.order_number} - {self.user.email}"
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey("Product", on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+    price = models.DecimalField(
+        max_digits=10, decimal_places=2
+    )  # Store price at time of order
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product.name} in Order {self.order.id}"
+
+
+class Transaction(models.Model):
+    order = models.ForeignKey(
+        Order, on_delete=models.CASCADE, related_name="transactions"
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    transaction_date = models.DateTimeField(auto_now_add=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "Pending"),
+            ("completed", "Completed"),
+            ("failed", "Failed"),
+        ],
+        default="pending",
+    )
+    currency = models.CharField(max_length=10, default="USD")
+    stripe_payment_intent_id = models.CharField(
+        max_length=255, unique=True, null=True, blank=True
+    )  # Stripe Payment ID
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Transaction {self.id} - Order {self.order.id} - {self.payment_status}"
