@@ -98,7 +98,7 @@ class Product(models.Model):
 class Order(models.Model):
     ORDER_STATUS_CHOICES = [
         ("pending", "Pending"),
-        ("processing", "Processing"),
+        ("processed", "Processed"),
         ("cancelled", "Cancelled"),
     ]
 

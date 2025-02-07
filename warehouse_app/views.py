@@ -183,7 +183,7 @@ class StripeWebhookView(APIView):
 
         # Update order status
         order.payment_status = "paid"
-        order.order_status = "processing"
+        order.order_status = "processed"
         order.save()
 
     def handle_failed_payment(self, payment_intent):
