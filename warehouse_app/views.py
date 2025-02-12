@@ -113,6 +113,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticated]
+    lookup_field = "product_id"
 
 
 class CreatePaymentIntentView(APIView):
@@ -147,9 +148,9 @@ class CreatePaymentIntentView(APIView):
 
 
 class StripeWebhookView(APIView):
-    permission_classes = []  # No authentication for Stripe webhooks
-    authentication_classes = []  # Remove authentication classes
-    csrf_exempt = True  # Exempt from CSRF
+    permission_classes = []
+    authentication_classes = []
+    csrf_exempt = True
 
     def post(self, request):
         payload = request.body
@@ -172,33 +173,42 @@ class StripeWebhookView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def handle_successful_payment(self, payment_intent):
-        transaction = Transaction.objects.get(
-            stripe_payment_intent_id=payment_intent["id"]
-        )
-        order = transaction.order
+        with transaction.atomic():
+            transaction_obj = Transaction.objects.get(
+                stripe_payment_intent_id=payment_intent["id"]
+            )
+            order = transaction_obj.order
 
-        # Update transaction status
-        transaction.payment_status = "completed"
-        transaction.save()
+            # Update transaction status
+            transaction_obj.payment_status = "completed"
+            transaction_obj.save()
 
-        # Update order status
-        order.payment_status = "paid"
-        order.order_status = "processed"
-        order.save()
+            # Update order status
+            order.payment_status = "paid"
+            order.order_status = "processed"
+            order.save()
+
+            # Now reduce stock quantities
+            order_items = order.items.all()
+            for item in order_items:
+                product = item.product
+                product.stock_quantity -= item.quantity
+                product.save()
 
     def handle_failed_payment(self, payment_intent):
-        transaction = Transaction.objects.get(
-            stripe_payment_intent_id=payment_intent["id"]
-        )
-        order = transaction.order
+        with transaction.atomic():
+            transaction_obj = Transaction.objects.get(
+                stripe_payment_intent_id=payment_intent["id"]
+            )
+            order = transaction_obj.order
 
-        # Update transaction status
-        transaction.payment_status = "failed"
-        transaction.save()
+            # Update transaction status
+            transaction_obj.payment_status = "failed"
+            transaction_obj.save()
 
-        # Update order status
-        order.payment_status = "failed"
-        order.save()
+            # Update order status but keep it pending
+            order.payment_status = "failed"
+            order.save()
 
 
 class TransactionListView(generics.ListAPIView):
@@ -220,39 +230,95 @@ class CreateOrderView(generics.CreateAPIView):
             items = data.get("items", [])
             total_price = data.get("total_price", 0)
 
-            # Add logging to see what's being received
-            print("Received data:", data)
-            print("Items:", items)
-            print("Total price:", total_price)
-
             if not items:
                 return Response(
                     {"error": "No items provided"}, status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # First check for existing pending orders
+            existing_pending_order = Order.objects.filter(
+                user=user, payment_status="pending", order_status="pending"
+            ).first()
+
+            if existing_pending_order:
+                # Check if the items and total price match
+                existing_items = existing_pending_order.items.all()
+                existing_items_data = [
+                    {
+                        "product": item.product.product_id,
+                        "quantity": item.quantity,
+                        "price": float(item.price),
+                    }
+                    for item in existing_items
+                ]
+
+                # Sort both lists to ensure consistent comparison
+                existing_items_data = sorted(
+                    existing_items_data, key=lambda x: x["product"]
+                )
+                new_items = sorted(items, key=lambda x: x["product"])
+
+                # Check if the orders match
+                orders_match = (
+                    len(existing_items_data) == len(new_items)
+                    and all(
+                        existing_item["product"] == new_item["product"]
+                        and existing_item["quantity"] == new_item["quantity"]
+                        and abs(existing_item["price"] - new_item["price"])
+                        < 0.01  # Using small delta for float comparison
+                        for existing_item, new_item in zip(
+                            existing_items_data, new_items
+                        )
+                    )
+                    and abs(
+                        float(existing_pending_order.total_price) - float(total_price)
+                    )
+                    < 0.01
+                )
+
+                if orders_match:
+                    return Response(
+                        {
+                            "id": existing_pending_order.id,
+                            "order_number": existing_pending_order.order_number,
+                            "message": "Using existing pending order",
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+                else:
+                    # If the orders don't match, cancel the existing order and create a new one
+                    existing_pending_order.order_status = "cancelled"
+                    existing_pending_order.payment_status = "cancelled"
+                    existing_pending_order.save()
+
+            # Create new order
             with transaction.atomic():
+                # Generate unique order number
                 order_number = str(uuid.uuid4())[:8]
 
-                # Add logging for order creation
-                print("Creating order with number:", order_number)
-
+                # Create the order
                 order = Order.objects.create(
                     user=user,
                     order_number=order_number,
                     total_price=total_price,
                     order_status="pending",
+                    payment_status="pending",
                 )
 
-                # Add logging for items processing
+                # Validate and create order items
                 for item in items:
-                    print("Processing item:", item)
                     product = Product.objects.get(product_id=item["product"])
+
+                    if abs(float(product.price_per_unit) - float(item["price"])) > 0.01:
+                        raise ValidationError(
+                            f"Price mismatch for {product.name}. Expected: {product.price_per_unit}, Got: {item['price']}"
+                        )
+
+                    # Check stock availability
                     if product.stock_quantity < item["quantity"]:
                         raise ValidationError(f"Not enough stock for {product.name}")
 
-                    product.stock_quantity -= item["quantity"]
-                    product.save()
-
+                    # Create order item
                     OrderItem.objects.create(
                         order=order,
                         product=product,
@@ -265,18 +331,9 @@ class CreateOrderView(generics.CreateAPIView):
                     status=status.HTTP_201_CREATED,
                 )
 
-        except Product.DoesNotExist as e:
-            return Response(
-                {"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND
-            )
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            # Log the full error
-            import traceback
-
-            print("Error:", str(e))
-            print("Traceback:", traceback.format_exc())
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -296,3 +353,121 @@ class UserOrdersListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user).order_by("-order_date")
+
+
+class CancelOrderView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            print(f"Attempting to find order {pk} for user {request.user.id}")
+
+            # Check if order exists
+            order = Order.objects.filter(id=pk).first()
+            if not order:
+                print(f"Order {pk} not found")
+                return Response(
+                    {"error": f"Order {pk} not found"}, status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Check if user owns the order
+            if order.user != request.user:
+                print(f"Order {pk} does not belong to user {request.user.id}")
+                return Response(
+                    {"error": "Not authorized to cancel this order"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            print(
+                f"Found order: {order.id}, status: {order.order_status}, payment: {order.payment_status}"
+            )
+
+            # Only allow cancellation of pending or failed payment orders
+            if order.payment_status not in ["pending", "failed"]:
+                print(
+                    f"Cannot cancel order with payment status: {order.payment_status}"
+                )
+                return Response(
+                    {"error": "Cannot cancel orders that have been paid"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                with transaction.atomic():
+                    # Update order status
+                    order.order_status = "cancelled"
+                    order.payment_status = "cancelled"
+                    order.save()
+                    print(f"Updated order {order.id} status to cancelled")
+
+                    # If there are any transactions, mark them as cancelled
+                    # Using the correct related_name 'transactions' instead of 'transaction_set'
+                    order.transactions.all().update(payment_status="failed")
+                    print(f"Updated transactions to failed")
+
+                    # Return any reserved stock
+                    order_items = order.items.all()
+                    for item in order_items:
+                        product = item.product
+                        # Only add back to stock if it was previously reserved
+                        if order.order_status == "pending":
+                            product.stock_quantity += item.quantity
+                            product.save()
+                            print(
+                                f"Returned {item.quantity} units to product {product.id}"
+                            )
+
+                return Response(
+                    {"message": "Order cancelled successfully"},
+                    status=status.HTTP_200_OK,
+                )
+
+            except Exception as e:
+                print(f"Database transaction error: {str(e)}")
+                return Response(
+                    {"error": "Error updating order status"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        except Exception as e:
+            import traceback
+
+            print(f"Error in CancelOrderView: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class OrderDetailView(generics.RetrieveAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user)
+
+
+# views.py
+class VerifyCartPricesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        cart_items = request.data.get("items", [])
+        verification_results = []
+
+        for item in cart_items:
+            product = Product.objects.get(product_id=item["product_id"])
+            verification_results.append(
+                {
+                    "product_id": item["product_id"],
+                    "name": product.name,
+                    "current_price": str(product.price_per_unit),
+                    "cart_price": str(item["price_per_unit"]),
+                    "price_matched": abs(
+                        float(product.price_per_unit) - float(item["price_per_unit"])
+                    )
+                    < 0.01,
+                }
+            )
+
+        return Response(verification_results)

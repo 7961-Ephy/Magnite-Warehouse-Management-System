@@ -7,20 +7,35 @@ export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
 
   const addToCart = (product, quantity) => {
+    console.log("Adding to cart:", { product, quantity });
     setCartItems((prevItems) => {
       const existingItem = prevItems.find(
         (item) => item.product_id === product.product_id
       );
 
+      // Add logging to debug price
+      console.log("Adding product with price:", product.price_per_unit);
+
       if (existingItem) {
         return prevItems.map((item) =>
           item.product_id === product.product_id
-            ? { ...item, quantity: item.quantity + quantity }
+            ? {
+                ...item,
+                quantity: item.quantity + quantity,
+                price_per_unit: product.price_per_unit, // Ensure price is updated
+              }
             : item
         );
       }
 
-      return [...prevItems, { ...product, quantity }];
+      return [
+        ...prevItems,
+        {
+          ...product,
+          quantity,
+          price_per_unit: product.price_per_unit, // Explicitly set price
+        },
+      ];
     });
   };
 
@@ -40,6 +55,7 @@ export const CartProvider = ({ children }) => {
   };
 
   const getCartTotal = () => {
+    console.log("Cart items for total:", cartItems);
     return cartItems.reduce(
       (total, item) => total + item.price_per_unit * item.quantity,
       0

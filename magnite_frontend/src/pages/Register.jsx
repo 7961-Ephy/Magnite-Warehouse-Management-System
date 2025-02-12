@@ -1,13 +1,12 @@
-// src/pages/Register.jsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 function Register() {
   const [formData, setFormData] = useState({
     username: "",
     email: "",
-    name: "", // Full name
-    contact_info: "", // Contact information
+    name: "",
+    contact_info: "",
     password: "",
   });
   const [error, setError] = useState("");
@@ -27,7 +26,6 @@ function Register() {
     setError("");
 
     try {
-      // Prepare contact info as JSON
       const contactInfo = formData.contact_info
         ? { additional_contact: formData.contact_info }
         : null;
@@ -45,7 +43,7 @@ function Register() {
             name: formData.name,
             contact_info: contactInfo,
             password: formData.password,
-            role: "trader", // Default role for registration
+            role: "trader",
           }),
         }
       );
@@ -55,7 +53,6 @@ function Register() {
         throw new Error(errorData.detail || "Registration failed");
       }
 
-      // Redirect to login after successful registration
       navigate("/login");
     } catch (err) {
       setError(
@@ -70,9 +67,13 @@ function Register() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-lg shadow-md w-96">
         <h2 className="text-2xl font-bold mb-6 text-center">Register</h2>
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
             <label htmlFor="username" className="block text-gray-700 mb-2">
               Username
             </label>
@@ -82,12 +83,12 @@ function Register() {
               name="username"
               value={formData.username}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             />
           </div>
 
-          <div className="mb-4">
+          <div>
             <label htmlFor="email" className="block text-gray-700 mb-2">
               Email
             </label>
@@ -97,12 +98,12 @@ function Register() {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             />
           </div>
 
-          <div className="mb-4">
+          <div>
             <label htmlFor="name" className="block text-gray-700 mb-2">
               Full Name
             </label>
@@ -112,12 +113,12 @@ function Register() {
               name="name"
               value={formData.name}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             />
           </div>
 
-          <div className="mb-4">
+          <div>
             <label htmlFor="contact_info" className="block text-gray-700 mb-2">
               Contact Information
             </label>
@@ -127,12 +128,12 @@ function Register() {
               name="contact_info"
               value={formData.contact_info}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Optional: Phone, address, etc."
             />
           </div>
 
-          <div className="mb-6">
+          <div>
             <label htmlFor="password" className="block text-gray-700 mb-2">
               Password
             </label>
@@ -142,18 +143,29 @@ function Register() {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             />
           </div>
 
           <button
             type="submit"
-            className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
+            className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors duration-200"
           >
             Register
           </button>
         </form>
+
+        {/* Login Section */}
+        <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+          <p className="text-gray-600">Already have an account?</p>
+          <Link
+            to="/login"
+            className="mt-2 inline-block text-blue-500 hover:text-blue-600 font-medium"
+          >
+            Login here
+          </Link>
+        </div>
       </div>
     </div>
   );

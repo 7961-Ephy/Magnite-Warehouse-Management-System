@@ -13,6 +13,8 @@ from .views import (
     OrderPaymentStatusView,
     CreateOrderView,
     UserOrdersListView,
+    CancelOrderView,
+    OrderDetailView,
 )
 
 urlpatterns = [
@@ -24,7 +26,10 @@ urlpatterns = [
     path("categories/<int:pk>/", CategoryDetailView.as_view(), name="category-detail"),
     # Product Endpoints
     path("products/", ProductListCreateView.as_view(), name="add-product"),
-    path("products/<int:pk>/", ProductDetailView.as_view(), name="product-detail"),
+    # path("products/<int:pk>/", ProductDetailView.as_view(), name="product-detail"),
+    path(
+        "products/<int:product_id>/", ProductDetailView.as_view(), name="product-detail"
+    ),
     # Payment/Checkout Endpoints
     path(
         "create-payment-intent/",
@@ -33,6 +38,7 @@ urlpatterns = [
     ),
     path("stripe/webhook/", StripeWebhookView.as_view(), name="stripe-webhook"),
     path("transactions/", TransactionListView.as_view(), name="transaction-list"),
+    path("orders/<int:pk>/cancel/", CancelOrderView.as_view(), name="cancel-order"),
     path("orders/", CreateOrderView.as_view(), name="create-order"),
     path(
         "orders/<int:pk>/payment-status/",
@@ -40,4 +46,16 @@ urlpatterns = [
         name="order-payment-status",
     ),
     path("orders/list/", UserOrdersListView.as_view(), name="user-orders-list"),
+    path("orders/<int:pk>/", OrderDetailView.as_view(), name="order-detail"),
 ]
+
+
+# path("orders/", CreateOrderView.as_view(), name="create-order"),
+# path("orders/<int:pk>/", OrderDetailView.as_view(), name="order-detail"),
+# path("orders/<int:pk>/cancel/", CancelOrderView.as_view(), name="cancel-order"),
+# path(
+#     "orders/<int:pk>/payment-status/",
+#     OrderPaymentStatusView.as_view(),
+#     name="order-payment-status",
+# ),
+# path("orders/list/", UserOrdersListView.as_view(), name="user-orders-list"),

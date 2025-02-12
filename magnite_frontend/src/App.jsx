@@ -12,6 +12,8 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Products from "./pages/Products";
+import Statistics from "./pages/Statistics";
 import Orders from "./pages/Orders";
 import Cart from "./pages/MyCart";
 import Profile from "./pages/Profile";
@@ -61,6 +63,22 @@ function App() {
               element={
                 <ProtectedRoute adminOnly={true}>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products"
+              element={
+                <ProtectedRoute adminOnly={true}>
+                  <Products />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/statistics"
+              element={
+                <ProtectedRoute adminOnly={true}>
+                  <Statistics />
                 </ProtectedRoute>
               }
             />

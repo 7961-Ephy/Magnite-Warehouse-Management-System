@@ -1,288 +1,198 @@
-// src/pages/Dashboard.jsx
-import React, { useState, useEffect } from "react";
+/* eslint-disable no-unused-vars */
+
+// pages/Dashboard.jsx
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import AdminNavbar from "../components/AdminNavbar";
+import AddProductBtn from "../components/AddProductBtn";
+import {
+  Package2,
+  ShoppingCart,
+  AlertCircle,
+  TrendingUp,
+  DollarSign,
+  Archive,
+  Clock,
+} from "lucide-react";
 
 function Dashboard() {
   const { user } = useAuth();
-  const [categories, setCategories] = useState([]);
-  const [formData, setFormData] = useState({
-    name: "",
-    category: "",
-    stock_quantity: "",
-    price_per_unit: "",
-    reorder_threshold: "",
-    reorder_quantity: "",
-    image: null,
-  });
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [recentActivity] = useState([
+    {
+      id: 1,
+      type: "order",
+      message: "New order #1234 received",
+      time: "5 minutes ago",
+      status: "pending",
+    },
+    {
+      id: 2,
+      type: "stock",
+      message: 'Product "Gaming Mouse" is low on stock',
+      time: "2 hours ago",
+      status: "warning",
+    },
+    {
+      id: 3,
+      type: "sale",
+      message: "Daily sales goal reached",
+      time: "4 hours ago",
+      status: "success",
+    },
+    {
+      id: 4,
+      type: "order",
+      message: "Order #1233 has been delivered",
+      time: "5 hours ago",
+      status: "success",
+    },
+  ]);
 
-  // Fetch categories on component mount
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const token = localStorage.getItem("access_token");
-        const response = await fetch(
-          "http://localhost:8000/api/accounts/categories/",
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+  const stats = [
+    {
+      title: "Total Sales",
+      value: "$12,426",
+      change: "+16%",
+      icon: DollarSign,
+      trend: "up",
+    },
+    {
+      title: "Active Orders",
+      value: "23",
+      change: "+5%",
+      icon: ShoppingCart,
+      trend: "up",
+    },
+    {
+      title: "Low Stock Items",
+      value: "8",
+      change: "-2",
+      icon: Archive,
+      trend: "down",
+    },
+    {
+      title: "Total Products",
+      value: "142",
+      change: "+12",
+      icon: Package2,
+      trend: "up",
+    },
+  ];
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch categories");
-        }
-
-        const data = await response.json();
-        setCategories(data);
-      } catch (err) {
-        console.error("Error fetching categories:", err);
-        setError("Could not load categories");
-      }
-    };
-
-    fetchCategories();
-  }, []);
-
-  const handleChange = (e) => {
-    const { name, value, files } = e.target;
-
-    // Handle file input separately
-    if (name === "image") {
-      setFormData((prev) => ({
-        ...prev,
-        image: files[0],
-      }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+  const getActivityIcon = (type) => {
+    switch (type) {
+      case "order":
+        return <ShoppingCart className="w-4 h-4" />;
+      case "stock":
+        return <AlertCircle className="w-4 h-4" />;
+      case "sale":
+        return <TrendingUp className="w-4 h-4" />;
+      default:
+        return <Clock className="w-4 h-4" />;
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-
-    const formDataToSubmit = new FormData();
-    formDataToSubmit.append("name", formData.name);
-    formDataToSubmit.append("category_id", formData.category); // Changed from category to category_id
-    formDataToSubmit.append("stock_quantity", formData.stock_quantity);
-    formDataToSubmit.append("price_per_unit", formData.price_per_unit);
-    formDataToSubmit.append("reorder_threshold", formData.reorder_threshold);
-    formDataToSubmit.append("reorder_quantity", formData.reorder_quantity);
-
-    if (formData.image) {
-      formDataToSubmit.append("image", formData.image);
-    }
-
-    try {
-      const token = localStorage.getItem("access_token");
-      const response = await fetch(
-        "http://localhost:8000/api/accounts/products/",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formDataToSubmit,
-        }
-      );
-
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || "Product creation failed");
-        } else {
-          const textError = await response.text();
-          console.error("Server error response:", textError);
-          throw new Error("Server error occurred");
-        }
-      }
-
-      const responseData = await response.json();
-      setSuccess("Product added successfully!");
-
-      // Reset form
-      setFormData({
-        name: "",
-        category: "",
-        stock_quantity: "",
-        price_per_unit: "",
-        reorder_threshold: "",
-        reorder_quantity: "",
-        image: null,
-      });
-
-      if (e.target.image) {
-        e.target.image.value = "";
-      }
-    } catch (err) {
-      setError(err.message);
-      console.error("Error:", err);
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-50 text-yellow-700";
+      case "warning":
+        return "bg-red-50 text-red-700";
+      case "success":
+        return "bg-green-50 text-green-700";
+      default:
+        return "bg-gray-50 text-gray-700";
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="container mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
-
-        {error && (
-          <div className="bg-red-100 text-red-700 p-4 rounded mb-4">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="bg-green-100 text-green-700 p-4 rounded mb-4">
-            {success}
-          </div>
-        )}
-
-        <div className="bg-white shadow-md rounded-lg p-8">
-          <h2 className="text-2xl font-semibold mb-6">Add New Product</h2>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="flex h-screen bg-gray-50">
+      <AdminNavbar />
+      <div className="flex-1 overflow-auto">
+        <div className="p-8">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
             <div>
-              <label htmlFor="name" className="block text-gray-700 mb-2">
-                Product Name
-              </label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
+              <h1 className="text-2xl font-bold text-gray-900">
+                Welcome back, Admin
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Here&apos;s what&apos;s happening with your store today.
+              </p>
             </div>
+            <AddProductBtn />
+          </div>
 
-            <div>
-              <label htmlFor="category" className="block text-gray-700 mb-2">
-                Category
-              </label>
-              <select
-                id="category"
-                name="category"
-                value={formData.category}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-              >
-                <option value="">Select a Category</option>
-                {categories.map((category) => (
-                  <option
-                    key={category.category_id}
-                    value={category.category_id}
+          {/* Stats Grid */}
+          {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {stats.map((stat, index) => (
+              <div key={index} className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">
+                      {stat.title}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">
+                      {stat.value}
+                    </p>
+                  </div>
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <stat.icon className="w-5 h-5 text-blue-600" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center">
+                  <span
+                    className={`text-sm font-medium ${
+                      stat.trend === "up" ? "text-green-600" : "text-red-600"
+                    }`}
                   >
-                    {category.category_name}
-                  </option>
-                ))}
-              </select>
-            </div>
+                    {stat.change}
+                  </span>
+                  <span className="text-sm text-gray-600 ml-2">
+                    from last week
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div> */}
 
-            <div>
-              <label
-                htmlFor="stock_quantity"
-                className="block text-gray-700 mb-2"
-              >
-                Stock Quantity
-              </label>
-              <input
-                type="number"
-                id="stock_quantity"
-                name="stock_quantity"
-                value={formData.stock_quantity}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
+          {/* Recent Activity */}
+          {/* <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Recent Activity
+              </h2>
+              <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                View all
+              </button>
             </div>
-
-            <div>
-              <label
-                htmlFor="price_per_unit"
-                className="block text-gray-700 mb-2"
-              >
-                Price per Unit
-              </label>
-              <input
-                type="number"
-                id="price_per_unit"
-                name="price_per_unit"
-                step="0.01"
-                value={formData.price_per_unit}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
+            <div className="space-y-4">
+              {recentActivity.map((activity) => (
+                <div key={activity.id} className="flex items-center gap-4">
+                  <div
+                    className={`p-2 rounded-lg ${getStatusColor(
+                      activity.status
+                    )}`}
+                  >
+                    {getActivityIcon(activity.type)}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">
+                      {activity.message}
+                    </p>
+                    <p className="text-sm text-gray-500">{activity.time}</p>
+                  </div>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                      activity.status
+                    )}`}
+                  >
+                    {activity.status}
+                  </span>
+                </div>
+              ))}
             </div>
-
-            <div>
-              <label
-                htmlFor="reorder_threshold"
-                className="block text-gray-700 mb-2"
-              >
-                Reorder Threshold
-              </label>
-              <input
-                type="number"
-                id="reorder_threshold"
-                name="reorder_threshold"
-                value={formData.reorder_threshold}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="reorder_quantity"
-                className="block text-gray-700 mb-2"
-              >
-                Reorder Quantity
-              </label>
-              <input
-                type="number"
-                id="reorder_quantity"
-                name="reorder_quantity"
-                value={formData.reorder_quantity}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="image" className="block text-gray-700 mb-2">
-                Product Image (Optional)
-              </label>
-              <input
-                type="file"
-                id="image"
-                name="image"
-                accept="image/*"
-                onChange={handleChange}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
-            >
-              Add Product
-            </button>
-          </form>
+          </div> */}
         </div>
       </div>
     </div>

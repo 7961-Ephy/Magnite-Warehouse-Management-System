@@ -102,6 +102,13 @@ class Order(models.Model):
         ("cancelled", "Cancelled"),
     ]
 
+    PAYMENT_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("paid", "Paid"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+    ]
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     order_number = models.CharField(max_length=20, unique=True)
     order_status = models.CharField(
@@ -111,7 +118,7 @@ class Order(models.Model):
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     payment_status = models.CharField(
         max_length=20,
-        choices=[("pending", "Pending"), ("paid", "Paid"), ("failed", "Failed")],
+        choices=PAYMENT_STATUS_CHOICES,
         default="pending",
     )
 
@@ -132,6 +139,13 @@ class OrderItem(models.Model):
 
 
 class Transaction(models.Model):
+    PAYMENT_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+    ]
+
     order = models.ForeignKey(
         Order, on_delete=models.CASCADE, related_name="transactions"
     )
@@ -140,17 +154,13 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_status = models.CharField(
         max_length=20,
-        choices=[
-            ("pending", "Pending"),
-            ("completed", "Completed"),
-            ("failed", "Failed"),
-        ],
+        choices=PAYMENT_STATUS_CHOICES,
         default="pending",
     )
-    currency = models.CharField(max_length=10, default="USD")
+    currency = models.CharField(max_length=10, default="KES")  # Changed to KES
     stripe_payment_intent_id = models.CharField(
         max_length=255, unique=True, null=True, blank=True
-    )  # Stripe Payment ID
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
