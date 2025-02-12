@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/prop-types */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { loadStripe } from "@stripe/stripe-js";
@@ -27,7 +27,6 @@ const PaymentForm = ({ clientSecret, clearCart }) => {
 
   useEffect(() => {
     if (paymentSuccess) {
-      // Wait for 2 seconds before redirecting
       const timer = setTimeout(() => {
         clearCart();
         navigate("/orders");
@@ -39,21 +38,36 @@ const PaymentForm = ({ clientSecret, clearCart }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    console.log("Payment submission started", {
+      loading,
+      stripe: !!stripe,
+      elements: !!elements,
+    });
+
+    if (!stripe || !elements || loading) return;
 
     setLoading(true);
     setError(null);
 
-    const { error: paymentError, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required",
-    });
+    try {
+      console.log("Confirming payment...");
+      const { error: paymentError, paymentIntent } =
+        await stripe.confirmPayment({
+          elements,
+          redirect: "if_required",
+        });
+      console.log("Payment result:", { paymentError, paymentIntent });
 
-    if (paymentError) {
-      setError(paymentError.message);
+      if (paymentError) {
+        setError(paymentError.message);
+      } else if (paymentIntent && paymentIntent.status === "succeeded") {
+        setPaymentSuccess(true);
+      }
+    } catch (err) {
+      console.error("Payment error:", err);
+      setError(err.message);
+    } finally {
       setLoading(false);
-    } else if (paymentIntent && paymentIntent.status === "succeeded") {
-      setPaymentSuccess(true);
     }
   };
 
@@ -86,69 +100,76 @@ const PaymentForm = ({ clientSecret, clearCart }) => {
 
 const Checkout = () => {
   const { cartItems, getCartTotal, clearCart } = useCart();
-  const { user } = useAuth();
   const [clientSecret, setClientSecret] = useState(null);
   const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [orderCreated, setOrderCreated] = useState(false); // Add this
+
+  const createOrder = useCallback(async () => {
+    // Don't create order if already created or in progress
+    if (isLoading || orderCreated || clientSecret || cartItems.length === 0) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const orderResponse = await fetch(
+        "http://localhost:8000/api/accounts/orders/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+          body: JSON.stringify({
+            items: cartItems.map((item) => ({
+              product: item.product_id,
+              quantity: item.quantity,
+              price: item.price_per_unit,
+            })),
+            total_price: getCartTotal(),
+          }),
+        }
+      );
+
+      if (!orderResponse.ok) {
+        throw new Error("Failed to create order");
+      }
+
+      const order = await orderResponse.json();
+      setOrderCreated(true); // Mark order as created
+
+      const paymentResponse = await fetch(
+        "http://localhost:8000/api/accounts/create-payment-intent/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+          body: JSON.stringify({
+            order_id: order.id,
+          }),
+        }
+      );
+
+      if (!paymentResponse.ok) {
+        throw new Error("Failed to create payment intent");
+      }
+
+      const { clientSecret: newClientSecret } = await paymentResponse.json();
+      setClientSecret(newClientSecret);
+    } catch (err) {
+      setError(err.message);
+      setOrderCreated(false); // Reset if there was an error
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cartItems, getCartTotal, clientSecret, isLoading, orderCreated]);
 
   useEffect(() => {
-    const createOrder = async () => {
-      try {
-        // Create order first
-        const orderResponse = await fetch(
-          "http://localhost:8000/api/accounts/orders/",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-            },
-            body: JSON.stringify({
-              items: cartItems.map((item) => ({
-                product: item.product_id,
-                quantity: item.quantity,
-                price: item.price_per_unit,
-              })),
-              total_price: getCartTotal(),
-            }),
-          }
-        );
-
-        if (!orderResponse.ok) {
-          throw new Error("Failed to create order");
-        }
-
-        const order = await orderResponse.json();
-
-        // Create payment intent
-        const paymentResponse = await fetch(
-          "http://localhost:8000/api/accounts/create-payment-intent/",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-            },
-            body: JSON.stringify({
-              order_id: order.id,
-            }),
-          }
-        );
-
-        if (!paymentResponse.ok) {
-          throw new Error("Failed to create payment intent");
-        }
-
-        const { clientSecret } = await paymentResponse.json();
-        setClientSecret(clientSecret);
-      } catch (err) {
-        setError(err.message);
-      }
-    };
-
-    if (cartItems.length > 0) {
-      createOrder();
-    }
-  }, [cartItems, getCartTotal]);
+    createOrder();
+  }, [createOrder]);
 
   return (
     <div className="container mx-auto px-4 py-8">

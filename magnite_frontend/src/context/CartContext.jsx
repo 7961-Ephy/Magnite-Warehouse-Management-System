@@ -1,12 +1,18 @@
 /* eslint-disable react/prop-types */
-import { createContext, useContext, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
 
-  const addToCart = (product, quantity) => {
+  const addToCart = useCallback((product, quantity) => {
     setCartItems((prevItems) => {
       const existingItem = prevItems.find(
         (item) => item.product_id === product.product_id
@@ -22,53 +28,61 @@ export const CartProvider = ({ children }) => {
 
       return [...prevItems, { ...product, quantity }];
     });
-  };
+  }, []);
 
-  const removeFromCart = (productId) => {
+  const removeFromCart = useCallback((productId) => {
     setCartItems((prevItems) =>
       prevItems.filter((item) => item.product_id !== productId)
     );
-  };
+  }, []);
 
-  const updateQuantity = (productId, quantity) => {
+  const updateQuantity = useCallback((productId, quantity) => {
     if (quantity <= 0) return;
     setCartItems((prevItems) =>
       prevItems.map((item) =>
         item.product_id === productId ? { ...item, quantity } : item
       )
     );
-  };
+  }, []);
 
-  const getCartTotal = () => {
+  const getCartTotal = useCallback(() => {
     return cartItems.reduce(
       (total, item) => total + item.price_per_unit * item.quantity,
       0
     );
-  };
+  }, [cartItems]);
 
-  const getCartItemsCount = () => {
+  const getCartItemsCount = useCallback(() => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
-  };
+  }, [cartItems]);
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCartItems([]);
-  };
+  }, []);
 
-  return (
-    <CartContext.Provider
-      value={{
-        cartItems,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        getCartTotal,
-        getCartItemsCount,
-        clearCart,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
+  // Memoize the context value
+  const value = useMemo(
+    () => ({
+      cartItems,
+      addToCart,
+      removeFromCart,
+      updateQuantity,
+      getCartTotal,
+      getCartItemsCount,
+      clearCart,
+    }),
+    [
+      cartItems,
+      addToCart,
+      removeFromCart,
+      updateQuantity,
+      getCartTotal,
+      getCartItemsCount,
+      clearCart,
+    ]
   );
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
 
 export const useCart = () => {
